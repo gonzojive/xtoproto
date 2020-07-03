@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 
 	"github.com/golang/glog"
+	"github.com/otiai10/copy"
 )
 
 var (
@@ -22,7 +23,7 @@ var (
 func main() {
 	flag.Parse()
 	if err := run(); err != nil {
-		fmt.Fprintf(os.Stderr, "fatal error: %v", err)
+		fmt.Fprintf(os.Stderr, "fatal error: %v\n", err)
 		os.Exit(1)
 	}
 }
@@ -36,28 +37,42 @@ func run() error {
 		}
 		root = r
 	}
+	if err := os.Chdir(root); err != nil {
+		return err
+	}
+	glog.Infof("running commands from %s", root)
+	if err := runCmd(exec.Command("git", "diff-index", "--quiet", "HEAD")); err != nil {
+		return fmt.Errorf("git diff-index --quiet HEAD detected differences; ensure git repo is clean: %v", err)
+	}
+	return nil
 	if err := os.MkdirAll(*stagingDir, 0770); err != nil {
 		return err
 	}
 
-	glog.Infof("running commands from %s", root)
-	if err := os.Chdir(root); err != nil {
-		return err
-	}
 	got, err := exec.Command("bazel", "run", "//cmd/xtoproto_web", "--", "--output_dir", *stagingDir).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("error generating gh-pages content: %w/%s", err, string(got))
 	}
 	ghPagesBranch := fmt.Sprintf("gh-pages-release%s", *releaseBranchSuffix)
-	if err := run(exec.Command("git", "checkout", "--orphan", ghPagesBranch)); err != nil {
+	if err := runCmd(exec.Command("git", "checkout", "--orphan", ghPagesBranch)); err != nil {
 		return fmt.Errorf("failed to to create gh pages branch: %w", err)
 	}
-	if err := run(exec.Command("cp", "-R", filepath.Join(*stagingDir, "*"), root)); err != nil {
-		return fmt.Errorf("failed to copy files to git directory: %w", err)
+	files, err := filepath.Glob(filepath.Join(*stagingDir, "*"))
+	if err != nil {
+		return err
+	}
+	for _, f := range files {
+		if err := copy.Copy(f, root); err != nil {
+			return fmt.Errorf("failed to copy %q to %q: %w", f, *stagingDir, err)
+		}
 	}
 	return nil
 }
 
-func run(c *exec.Command) error {
-	return c.Run()
+func runCmd(c *exec.Cmd) error {
+	out, err := c.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%w / %s", err, string(out))
+	}
+	return nil
 }
