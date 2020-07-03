@@ -7,12 +7,16 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 
 	"github.com/golang/glog"
 )
 
 var (
-	projectDir = flag.String("workspace", "", "path to workspace directory")
+	projectDir          = flag.String("workspace", "", "path to workspace directory")
+	stagingDir          = flag.String("staging", "/tmp/xtoproto-staging", "path to staging directory")
+	releaseBranchSuffix = flag.String("branch_suffix", "", "suffix for git branches created during the release process")
+	tag                 = flag.String("tag", "", "should be something like v0.0.5")
 )
 
 func main() {
@@ -32,14 +36,28 @@ func run() error {
 		}
 		root = r
 	}
+	if err := os.MkdirAll(*stagingDir, 0770); err != nil {
+		return err
+	}
 
 	glog.Infof("running commands from %s", root)
 	if err := os.Chdir(root); err != nil {
 		return err
 	}
-	got, err := exec.Command("bazel", "run", "//cmd/xtoproto_web", "--", "--output_dir", root).CombinedOutput()
+	got, err := exec.Command("bazel", "run", "//cmd/xtoproto_web", "--", "--output_dir", *stagingDir).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("error generating gh-pages content: %w/%s", err, string(got))
 	}
+	ghPagesBranch := fmt.Sprintf("gh-pages-release%s", *releaseBranchSuffix)
+	if err := run(exec.Command("git", "checkout", "--orphan", ghPagesBranch)); err != nil {
+		return fmt.Errorf("failed to to create gh pages branch: %w", err)
+	}
+	if err := run(exec.Command("cp", "-R", filepath.Join(*stagingDir, "*"), root)); err != nil {
+		return fmt.Errorf("failed to copy files to git directory: %w", err)
+	}
 	return nil
+}
+
+func run(c *exec.Command) error {
+	return c.Run()
 }
