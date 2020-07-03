@@ -68,11 +68,12 @@ func run() error {
 			return fmt.Errorf("failed to copy %q to %q: %w", f, *stagingDir, err)
 		}
 	}
-	fmt.Printf("Genrated gh-pages content into new gh-paged-dervied branch.\nInsepct the output and push the release with\n\n  git push google %s:gh-pages\n", ghPagesBranch)
+	fmt.Printf("Generated gh-pages content into new gh-paged-dervied branch %s.\nInsepct the output and push the release with\n\n  git push google %s:gh-pages\n", ghPagesBranch, ghPagesBranch)
 	return nil
 }
 
 func runCmd(c *exec.Cmd) error {
+	glog.Infof("issuing command: %s", c)
 	out, err := c.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%w / %s", err, string(out))
