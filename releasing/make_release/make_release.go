@@ -44,7 +44,6 @@ func run() error {
 	if err := runCmd(exec.Command("git", "diff-index", "--quiet", "HEAD")); err != nil {
 		return fmt.Errorf("git diff-index --quiet HEAD detected differences; ensure git repo is clean: %v", err)
 	}
-	return nil
 	if err := os.MkdirAll(*stagingDir, 0770); err != nil {
 		return err
 	}
@@ -54,8 +53,11 @@ func run() error {
 		return fmt.Errorf("error generating gh-pages content: %w/%s", err, string(got))
 	}
 	ghPagesBranch := fmt.Sprintf("gh-pages-release%s", *releaseBranchSuffix)
-	if err := runCmd(exec.Command("git", "checkout", "--orphan", ghPagesBranch)); err != nil {
-		return fmt.Errorf("failed to to create gh pages branch: %w", err)
+	if err := runCmd(exec.Command("git", "pull", "google", fmt.Sprintf("gh-pages:%s", ghPagesBranch))); err != nil {
+		return fmt.Errorf("failed to create gh pages branch: %w", err)
+	}
+	if err := runCmd(exec.Command("git", "checkout", ghPagesBranch)); err != nil {
+		return fmt.Errorf("failed to checkout gh pages branch: %w", err)
 	}
 	files, err := filepath.Glob(filepath.Join(*stagingDir, "*"))
 	if err != nil {
@@ -66,6 +68,7 @@ func run() error {
 			return fmt.Errorf("failed to copy %q to %q: %w", f, *stagingDir, err)
 		}
 	}
+	fmt.Printf("Genrated gh-pages content into new gh-paged-dervied branch.\nInsepct the output and push the release with\n\n  git push google %s:gh-pages\n", ghPagesBranch)
 	return nil
 }
 
