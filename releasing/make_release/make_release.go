@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 
 	"github.com/golang/glog"
-	"github.com/otiai10/copy"
 )
 
 var (
@@ -65,7 +64,7 @@ func run() error {
 		return err
 	}
 	for _, f := range files {
-		if err := copy.Copy(f, root); err != nil {
+		if err := runCmd(exec.Command("cp", "-R", f, root+"/")); err != nil {
 			return fmt.Errorf("failed to copy %q to %q: %w", f, *stagingDir, err)
 		}
 	}
