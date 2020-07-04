@@ -18,6 +18,7 @@ var (
 	stagingDir          = flag.String("staging", "/tmp/xtoproto-staging", "path to staging directory")
 	releaseBranchSuffix = flag.String("branch_suffix", "", "suffix for git branches created during the release process")
 	tag                 = flag.String("tag", "", "should be something like v0.0.5")
+	repo                = flag.String("google_xproto_repository", "https://github.com/google/xtoproto.git", "the main repository to use for generating the release")
 )
 
 func main() {
@@ -53,7 +54,7 @@ func run() error {
 		return fmt.Errorf("error generating gh-pages content: %w/%s", err, string(got))
 	}
 	ghPagesBranch := fmt.Sprintf("gh-pages-release%s", *releaseBranchSuffix)
-	if err := runCmd(exec.Command("git", "pull", "google", fmt.Sprintf("gh-pages:%s", ghPagesBranch))); err != nil {
+	if err := runCmd(exec.Command("git", "fetch", *repo, fmt.Sprintf("gh-pages:%s", ghPagesBranch))); err != nil {
 		return fmt.Errorf("failed to create gh pages branch: %w", err)
 	}
 	if err := runCmd(exec.Command("git", "checkout", ghPagesBranch)); err != nil {
