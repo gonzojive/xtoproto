@@ -186,6 +186,11 @@ type Symbol struct {
 	namespace Namespace
 }
 
+// NewSymbol returns a freshly allocated Symbol.
+func NewSymbol(name string, namespace Namespace) *Symbol {
+	return &Symbol{name, namespace}
+}
+
 func (s *Symbol) Name() string         { return s.name }
 func (s *Symbol) Namespace() Namespace { return s.namespace }
 func (s *Symbol) Equals(other *Symbol) bool {

@@ -52,6 +52,22 @@ func TestParseSExpression(t *testing.T) {
 			wantSExpression: `(1 2 a:b)`,
 			wantErr:         false,
 		},
+		{
+			value: `(+ 4 (* 2.5 -3e5))`,
+			wantObject: object{
+				List: []object{
+					{Atom: sym{Name: "+"}},
+					{Atom: int(4)},
+					{List: []object{
+						{Atom: sym{Name: "*"}},
+						{Atom: float64(2.5)},
+						{Atom: float64(-300000)},
+					}},
+				},
+			},
+			wantSExpression: `(+ 4 (* 2.5 -300000))`,
+			wantErr:         false,
+		},
 	}
 	for _, tt := range tests {
 		name := tt.name

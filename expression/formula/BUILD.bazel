@@ -1,12 +1,22 @@
-load("@io_bazel_rules_go//go:def.bzl", "go_library")
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
-    srcs = ["formula.go"],
+    srcs = [
+        "formula.go",
+        "formula_builtins.go",
+    ],
     importpath = "github.com/google/xtoproto/expression/formula",
     visibility = ["//visibility:public"],
+    deps = ["//expression:go_default_library"],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["formula_test.go"],
+    embed = [":go_default_library"],
     deps = [
         "//expression:go_default_library",
-        "//proto/expression:go_default_library",
+        "@com_github_google_go_cmp//cmp:go_default_library",
     ],
 )

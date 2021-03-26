@@ -9,7 +9,6 @@ go_library(
         "//proto/expression:go_default_library",
         "//sexpr:go_default_library",
         "//sexpr/form:go_default_library",
-        "@org_golang_google_protobuf//encoding/prototext:go_default_library",
     ],
 )
 
