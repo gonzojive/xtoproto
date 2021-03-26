@@ -24,6 +24,7 @@ go_binary(
 filegroup(
     name = "generated_sources",
     srcs = [
+        "//proto/expression:expression_go_proto",
         "//proto/recordtoproto:recordtoproto_go_proto",
         "//proto/service:service_go_proto",
     ],

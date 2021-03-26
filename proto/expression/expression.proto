@@ -1,0 +1,137 @@
+syntax = "proto3";
+
+option go_package = "github.com/google/xtoproto/proto/expression";
+
+import "google/protobuf/any.proto";
+
+package xtoproto.expression;
+
+// Expression is a symbolic formula that can be evaluated to produce a value.
+//
+// Expression is modeled off of Lisp-style S-expressions. An expression is
+// either an atom or a 
+message Expression {
+  oneof value {
+    //////////// Protobuf's scalar values ////////////
+
+    // 64 bit float
+    double double = 1;
+
+    // 32 bit float
+    float float = 2;
+    
+    // Uses variable-length encoding. Inefficient for encoding negative numbers
+    // – if your field is likely to have negative values, use sint32 instead.
+    int32 int32 = 3;
+    
+    // Uses variable-length encoding. Inefficient for encoding negative numbers
+    // – if your field is likely to have negative values, use sint64 instead.
+    int64 int64 = 4;
+
+    // Uses variable-length encoding.
+    uint32 uint32 = 5;
+
+    // Uses variable-length encoding.
+    uint64 uint64 = 6;
+    
+    // Uses variable-length encoding. Signed int value. These more efficiently
+    // encode negative numbers than regular int32s.
+    sint32 sint32 = 7;
+
+    // Uses variable-length encoding. Signed int value. These more efficiently
+    // encode negative numbers than regular int64s.
+    sint64 sint64 = 8;
+
+    // Always four bytes. More efficient than uint32 if values are often greater
+    // than 228.
+    fixed32 fixed32 = 9;
+
+    // Always eight bytes. More efficient than uint64 if values are often
+    // greater than 256.
+    fixed64 fixed64 = 10;
+
+    // Always four bytes.
+    sfixed32 sfixed32 = 11;
+
+    // Always eight bytes.
+    sfixed64 sfixed64 = 12;
+
+    bool bool = 13;
+    
+    // A string must always contain UTF-8 encoded or 7-bit ASCII text, and
+    // cannot be longer than 232.
+    string string = 14;
+
+    // May contain any arbitrary sequence of bytes no longer than 232.
+    bytes bytes = 15;
+
+    //////////// Typical S-Expression object types ////////////
+
+    // A term in a vocabulary.
+    Symbol symbol = 16;
+
+    // A sequence of subexpressions. The 
+    List list = 17;
+
+    // A custom value.
+    google.protobuf.Any other = 20;
+  }
+
+  // Information about the textual location of the expression in a source file.
+  SourceContext source_context = 21;
+}
+
+// List is an ordered sequence of Expression values.
+message List {
+  repeated Expression elements = 1;  
+}
+
+// SourceContext is an ordered sequence of Expression values.
+message SourceContext {
+  // The name of the file in which the expression appeared. This may be a relative path
+  string file_name = 1;
+
+  message CursorPosition {
+    // The 0-based byte offset of the cursor within the file.
+    optional int64 byte_offset = 1;
+
+    // Line is the line number. 1 indicates the first line; 0 indicates invalid.
+    optional int64 line = 2;
+    
+    // column_byte indicates the column number as a byte offset from the
+    // beginning of the line. 1 indicates the first column; 0 is invalid.
+    optional int64 column_byte = 3;
+
+    // column_character indicates the column number as a character offset from
+    // the beginning of the line. 1 indicates the first column; 0 is invalid.
+    optional int64 column_character = 4;
+  }
+  // Range specifies a [start, end) span within a source file.
+  message Range {
+    CursorPosition start = 1;
+    CursorPosition end = 2;
+  }
+  // The textual range within the source file where the expression appeared.
+  Range range = 2;
+
+  // Additional information about the source position.
+  //
+  // The recommended method of adding details is to define a message for your
+  // application and add only a single message of that type to the details list.
+  repeated google.protobuf.Any details = 3;
+}
+
+// Symbol is a term in a vocabulary.
+//
+// A symbol corresponds to the concept of an "identifier" in many programming
+// languages. It is common in programming languages for identifiers to have a
+// short version that is used locally and a fully qualified name.
+//
+// Symbols with the same name and namespace are considered equal.
+message Symbol {
+    string name = 1;
+
+    // Namespace is a qualifier for the symbol name.
+    string namespace = 2;
+}
+
