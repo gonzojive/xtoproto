@@ -2,11 +2,23 @@ package expression
 
 import (
 	"fmt"
+	"go/constant"
+	"regexp"
+	"strings"
 
 	pb "github.com/google/xtoproto/proto/expression"
 	"github.com/google/xtoproto/sexpr"
 	"github.com/google/xtoproto/sexpr/form"
-	"google.golang.org/protobuf/encoding/prototext"
+)
+
+// Namespace is a special type used for symbol namespaces.
+type Namespace string
+
+// Special namespace values.
+const (
+	// Symbols with an empty package name but an explicit leading colon are put
+	// into the "keyword" namespace, as is done in Common Lisp.
+	KeywordNamespace Namespace = "keyword"
 )
 
 // Stringer is used to print expressions in a machine readable format.
@@ -28,10 +40,18 @@ func (e *Expression) Value() interface{} {
 }
 
 func (e *Expression) String() string {
-	if sym := e.Symbol(); sym != nil {
-		return sym.String()
+	return e.ExpressionString()
+}
+
+func (e *Expression) ExpressionString() string {
+	val := e.Value()
+	if valueStringer, ok := val.(Stringer); ok {
+		return valueStringer.ExpressionString()
 	}
-	return prototext.MarshalOptions{Multiline: true}.Format(e.Proto())
+	if s, ok := val.(string); ok {
+		return fmt.Sprintf("%q", s)
+	}
+	return fmt.Sprintf("%v", e.Value())
 }
 
 func (e *Expression) Symbol() *Symbol {
@@ -66,13 +86,13 @@ func parseValue(expProto *pb.Expression) (interface{}, error) {
 	case *pb.Expression_Int32:
 		return val.Int32, nil
 	case *pb.Expression_Int64:
-		return val.Int64, nil
+		return int(val.Int64), nil
 	case *pb.Expression_Sfixed64:
 		return val.Sfixed64, nil
 	case *pb.Expression_Sint32:
 		return val.Sint32, nil
 	case *pb.Expression_Sint64:
-		return val.Sint64, nil
+		return int(val.Sint64), nil
 	case *pb.Expression_Uint32:
 		return val.Uint32, nil
 	case *pb.Expression_Uint64:
@@ -80,7 +100,10 @@ func parseValue(expProto *pb.Expression) (interface{}, error) {
 
 	// Composite values
 	case *pb.Expression_Symbol:
-		return &Symbol{name: val.Symbol.GetName(), namespace: val.Symbol.GetNamespace()}, nil
+		return &Symbol{
+			name:      val.Symbol.GetName(),
+			namespace: Namespace(val.Symbol.GetNamespace()),
+		}, nil
 
 	case *pb.Expression_List:
 		elems := make([]*Expression, len(val.List.GetElements()))
@@ -111,31 +134,126 @@ func ParseSExpression(value string) (*Expression, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error reading S-expression: %w", err)
 	}
-	if val := f.(form.String); val != nil {
+	return parseForm(f)
+}
+
+func parseForm(f form.Form) (*Expression, error) {
+	if val, ok := f.(form.String); ok {
 		return FromProto(
 			&pb.Expression{
 				Value: &pb.Expression_String_{String_: val.StringValue()},
 			})
 	}
+	if val, ok := f.(form.Number); ok {
+		constValue := val.Number()
+		switch constValue.Kind() {
+		case constant.Float:
+			double, _ := constant.Float64Val(constValue)
+			return FromProto(&pb.Expression{Value: &pb.Expression_Double{Double: double}})
+		case constant.Int:
+			i, _ := constant.Int64Val(constValue)
+			return FromProto(&pb.Expression{Value: &pb.Expression_Int64{Int64: i}})
+		default:
+			return nil, fmt.Errorf("unsupported number value: %v", constValue)
+		}
+	}
+	if val, ok := f.(form.Symbol); ok {
+		literal := val.SymbolLiteral()
+		sym, err := parseSymbol(literal)
+		if err != nil {
+			return nil, err
+		}
+		return FromProto(&pb.Expression{Value: &pb.Expression_Symbol{Symbol: sym.Proto()}})
+	}
+	if val, ok := f.(form.List); ok {
+		var exprs []*Expression
+		var protos []*pb.Expression
+		for i, subform := range form.Subforms(val) {
+			e, err := parseForm(subform)
+			if err != nil {
+				return nil, fmt.Errorf("%s: error parsing form[%d]: %w", subform.SourcePosition(), i, err)
+			}
+			exprs = append(exprs, e)
+			protos = append(protos, e.Proto())
+		}
+		return FromProto(&pb.Expression{Value: &pb.Expression_List{List: &pb.List{Elements: protos}}})
+	}
 	return nil, fmt.Errorf("unsupported")
 }
 
-type Symbol struct{ name, namespace string }
+type Symbol struct {
+	name      string
+	namespace Namespace
+}
 
-func (s *Symbol) Name() string      { return s.name }
-func (s *Symbol) Namespace() string { return s.namespace }
+func (s *Symbol) Name() string         { return s.name }
+func (s *Symbol) Namespace() Namespace { return s.namespace }
 func (s *Symbol) Equals(other *Symbol) bool {
 	return s == other || (s != nil && other != nil && s.Name() == other.Name() && s.Namespace() == other.Namespace())
 }
 
-func (s *Symbol) String() string {
-	if s.Namespace() != "" {
-		return fmt.Sprintf("%s:%s", s.Namespace(), s.Name())
+func (s *Symbol) ExpressionString() string {
+	if ns := s.Namespace(); ns != "" {
+		if ns == KeywordNamespace {
+			ns = ""
+		}
+		return fmt.Sprintf("%s:%s", ns, s.Name())
 	}
 	return s.Name()
 }
 
+func (s *Symbol) Proto() *pb.Symbol {
+	return &pb.Symbol{Name: s.Name(), Namespace: string(s.Namespace())}
+}
+
+// symbols are of the form "a:b" "a::b" "a".
+var symbolRE = regexp.MustCompile(`^([^\:]*)(\:\:?)?(.*)$`)
+
+func parseSymbol(literal string) (*Symbol, error) {
+	matches := symbolRE.FindStringSubmatch(literal)
+	if len(matches) == 0 {
+		return nil, fmt.Errorf("bad symbol %q", literal)
+	}
+	namespace, sep, name := matches[1], matches[2], matches[3]
+	if sep == "" {
+		return &Symbol{name: namespace}, nil
+	}
+	if namespace == "" {
+		if sep != ":" {
+			return nil, fmt.Errorf("invalid symbol begins with two colons: %q", literal)
+		}
+		namespace = string(KeywordNamespace)
+	}
+	return &Symbol{name: name, namespace: Namespace(namespace)}, nil
+}
+
+func (s *Symbol) String() string { return s.ExpressionString() }
+
 type List struct{ elems []*Expression }
+
+func (l *List) Len() int              { return len(l.elems) }
+func (l *List) Nth(i int) *Expression { return l.elems[i] }
+func (l *List) Slice() []*Expression  { return l.elems }
+
+func (l *List) String() string { return l.ExpressionString() }
+
+func (l *List) ExpressionString() string {
+	var items []string
+	for _, e := range l.elems {
+		items = append(items, e.ExpressionString())
+	}
+	return fmt.Sprintf("(%s)", strings.Join(items, " "))
+}
+
+func (l *List) Proto() *pb.List {
+	var elems []*pb.Expression
+	for _, e := range l.elems {
+		elems = append(elems, e.Proto())
+	}
+	return &pb.List{
+		Elements: elems,
+	}
+}
 
 func FromInt(v int) *Expression {
 	return &Expression{proto: &pb.Expression{Value: &pb.Expression_Int64{Int64: int64(v)}}}
