@@ -134,4 +134,3 @@ message Symbol {
     // Namespace is a qualifier for the symbol name.
     string namespace = 2;
 }
-

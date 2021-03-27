@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+option go_package = "github.com/google/xtoproto/proto/internal/formulair";
+
+package xtoproto.formula.internal;
+
+import "github.com/google/xtoproto/proto/expression/expression.proto";
+
+// Intermediate representation for the formula compiler.
+message IR {
+
+}
+
+message LexicalEnvironment {
+    message Binding {
+        xtoproto.expression.Symbol name = 1;
+        Value value = 1;
+    }
+}
+
+// Value is the result of evaluating an expression.
+message Value {
+    // A value that specifies how the value is computed.
+    oneof exec_spec {
+        // A constant value.
+        xtoproto.expression.Expression constant = 1;
+        // The result of calling a function.
+    }
+}
+
+message Funcall {
+    // The function to be called.
+    Value operand = 1;
+
+    // Arguments specified by 
+    repeated Value positional_args = 2;
+
+    // Arguments specified by keywords.
+    repeated KeywordArgumentValue keyword_args = 3;
+}
+
+message KeywordArgumentValue {
+    Value keyword = 1;
+    Value value = 2;
+}

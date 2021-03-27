@@ -4,6 +4,7 @@ go_library(
     name = "go_default_library",
     srcs = [
         "formula.go",
+        "formula_ast.go",
         "formula_builtins.go",
     ],
     importpath = "github.com/google/xtoproto/expression/formula",
