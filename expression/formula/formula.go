@@ -80,6 +80,7 @@ type fnDef struct {
 	impl func(ectx *EvalContext, args []Value) (Value, error)
 }
 
+// Value is an evaluated value.
 type Value interface{}
 
 // lexEnv is used to represent the lexical environment. It contains

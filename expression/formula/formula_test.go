@@ -34,6 +34,35 @@ func TestEval(t *testing.T) {
 			want:    int(2),
 			wantErr: false,
 		},
+		{
+			name:    "1 + 1",
+			exp:     mustExpr(`(- 1 1)`),
+			want:    int(0),
+			wantErr: false,
+		},
+		{
+			name:    "1 + 1",
+			exp:     mustExpr(`(- 1.0 1)`),
+			want:    float64(0),
+			wantErr: false,
+		},
+		{
+			name:    "1 + 1",
+			exp:     mustExpr(`(- 31.0)`),
+			want:    float64(-31),
+			wantErr: false,
+		},
+		{
+			name:    "1 + 1",
+			exp:     mustExpr(`(-)`),
+			want:    int(0),
+			wantErr: false,
+		},
+		{
+			name:    "1 + 1",
+			exp:     mustExpr(`(- "strings not allowed")`),
+			wantErr: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
