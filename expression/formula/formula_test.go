@@ -47,13 +47,13 @@ func TestEval(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:    "1 + 1",
+			name:    "single argument to minus",
 			exp:     mustExpr(`(- 31.0)`),
 			want:    float64(-31),
 			wantErr: false,
 		},
 		{
-			name:    "1 + 1",
+			name:    "empty subtraction = 0",
 			exp:     mustExpr(`(-)`),
 			want:    int(0),
 			wantErr: false,

@@ -9,7 +9,10 @@ go_library(
     ],
     importpath = "github.com/google/xtoproto/expression/formula",
     visibility = ["//visibility:public"],
-    deps = ["//expression:go_default_library"],
+    deps = [
+        "//expression:go_default_library",
+        "//proto/internal/formulair:go_default_library",
+    ],
 )
 
 go_test(

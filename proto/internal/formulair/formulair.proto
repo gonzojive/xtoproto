@@ -4,27 +4,90 @@ option go_package = "github.com/google/xtoproto/proto/internal/formulair";
 
 package xtoproto.formula.internal;
 
+import "google/protobuf/empty.proto";
 import "github.com/google/xtoproto/proto/expression/expression.proto";
 
-// Intermediate representation for the formula compiler.
-message IR {
+// Intermediate representation:
 
+// Graph contains a set of objects that may reference each other 
+message Graph {
+    message TypeEntry {
+        ID id = 1;
+        Type type = 2;
+    }
+    repeated TypeEntry types = 1;
 }
 
-message LexicalEnvironment {
-    message Binding {
-        xtoproto.expression.Symbol name = 1;
-        Value value = 1;
+// ID is an identifier that is unique within the compilation environment.
+//
+// An ID may be used to refer to 
+message ID {
+    string id = 1;
+}
+
+message Type {
+    ID id = 1;
+
+    enum BasicKind {
+        KIND_UNSPECIFIED = 0;
+        NOT_BASIC_KIND = 1;
+
+        INT8 = 2;
+        INT16 = 3;
+        INT32 = 4;
+        INT64 = 5;
+
+        UINT8 = 6;
+        UINT16 = 7;
+        UINT32 = 8;
+        UINT64 = 9;
+
+        FLOAT32 = 10;
+        FLOAT64 = 11;
+        STRING = 12;
+        BYTES = 13;
     }
+
+    message FunctionCall {
+        message Arg {
+            oneof identity {
+                int32 position = 1;
+            }
+        }
+        repeated Arg args = 1;
+    }
+
+    oneof spec {
+        BasicKind basic_kind = 2;
+    }
+}
+
+// The set of bindings available when parsing the S-Expression forms into
+// the intermediate representation.
+message LexicalEnvironment {
+    repeated Binding bindings = 1;
+}
+
+message Binding {
+    enum Kind {
+        KIND_UNSPECIFIED = 0;
+        FUNCTION = 1;
+        VARIABLE = 2;
+    }
+    Kind kind = 1;
+    xtoproto.expression.Symbol name = 2;
 }
 
 // Value is the result of evaluating an expression.
 message Value {
+    ID type_id = 1;
+
     // A value that specifies how the value is computed.
     oneof exec_spec {
         // A constant value.
-        xtoproto.expression.Expression constant = 1;
+        xtoproto.expression.Expression constant = 2;
         // The result of calling a function.
+        Funcall funcall = 3;
     }
 }
 
@@ -42,4 +105,114 @@ message Funcall {
 message KeywordArgumentValue {
     Value keyword = 1;
     Value value = 2;
+}
+
+message AST {
+
+    message ImportStatement {
+        string short_name = 1;
+        string package_path = 2;
+    }
+
+    // File contains a macroexpanded version of a single file.
+    message File {
+        string package_short_name = 1;
+
+        repeated ImportStatement imports = 2;
+
+        Expression toplevel_expressions = 3;
+    }
+
+    message Expression {
+        // Values mostly correspond to the special forms here:
+        // http://www.lispworks.com/documentation/HyperSpec/Body/03_ababa.htm#clspecialops.
+        oneof value {
+            google.protobuf.Empty void = 1;
+            Constant constant = 2;
+            FunctionCall funcall = 3;
+            Function function = 4;
+            VariableRef variable = 5;
+            IfElse if_else = 6;
+            WhileLoop while_loop = 7;
+            Let let = 8;
+        }
+        SourceContext source_context = 20;
+    }
+
+    message Constant {
+        xtoproto.expression.Expression value = 1;
+    }
+
+    message IfElse {
+        Expression test = 1;
+        Expression then_expression = 2;
+        Expression else_expression = 3;
+    }
+
+    message WhileLoop {
+        Expression test = 1;
+        Expression body = 2;
+    }
+
+    message VariableRef {
+        xtoproto.expression.Symbol symbol = 1;
+    }
+
+    message FunctionCall {
+        Expression function = 1;
+        repeated Expression positional_args = 2;
+    }
+
+    message AssignVar {
+        // The variable assigned.
+        string variable_id = 1;
+        Expression value = 2;
+    }
+
+    // The definition of a function.
+    //
+    // Corresponds to
+    // http://www.lispworks.com/documentation/HyperSpec/Body/s_fn.htm#function.
+    message Function {
+        message Arg {
+            xtoproto.expression.Symbol symbol = 1;
+            TypeExpression type = 2;
+            string variable_id = 3;
+        }
+        repeated Arg args = 1;
+        repeated TypeExpression return_types = 2;
+        Expression body = 3;
+    }
+
+    message TypeExpression {
+        oneof spec {
+            xtoproto.expression.Symbol type_name = 1;
+        }
+        SourceContext source_context = 8;
+    }
+
+    // A sequence of expressions. The evaluated value of the expression is the
+    // the value of the last expression.
+    message Program {
+        repeated Expression expressions = 1;
+    }
+
+    message Let {
+        message Binding {
+            xtoproto.expression.Symbol symbol = 1;
+            Expression value = 2;
+            TypeExpression value_type = 3;
+            string variable_id = 4;
+        }
+        // Ordered sequence of bindings. A symbol bound in binding[n] is
+        // available in the lexical environment of binding m if m > n.
+        repeated Binding bindings = 1;
+        Program body = 2;
+        // A unique identifier for the scope introduced by the Let form.
+        string scope_id = 3;
+    }
+
+    message SourceContext {
+        xtoproto.expression.SourceContext context = 1;
+    }
 }

@@ -11,7 +11,10 @@ proto_library(
         "//proto:__subpackages__",
         "//releasing:__subpackages__",
     ],
-    deps = ["//proto/expression:expression_proto"],
+    deps = [
+        "//proto/expression:expression_proto",
+        "@com_google_protobuf//:empty_proto",
+    ],
 )
 
 go_proto_library(
