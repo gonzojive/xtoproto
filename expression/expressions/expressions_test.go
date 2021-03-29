@@ -50,13 +50,19 @@ func TestBind(t *testing.T) {
 		exp *expression.Expression
 		dst interface{}
 	}
-	tests := []struct {
+
+	type testCase struct {
 		name    string
 		args    args
 		want    interface{}
 		wantErr bool
-	}{
-		{
+	}
+	var tests []testCase
+	newCase := func(arg ...testCase) {
+		tests = append(tests, arg...)
+	}
+	newCase(
+		testCase{
 			name: "string to *string",
 			args: args{
 				exp: MustParse(`"a"`),
@@ -65,7 +71,7 @@ func TestBind(t *testing.T) {
 			want:    func() *string { s := "a"; return &s }(),
 			wantErr: false,
 		},
-		{
+		testCase{
 			name: "123 to int",
 			args: args{
 				exp: MustParse(`123`),
@@ -74,7 +80,7 @@ func TestBind(t *testing.T) {
 			want:    intPtr(123),
 			wantErr: false,
 		},
-		{
+		testCase{
 			name: "123 to int",
 			args: args{
 				exp: MustParse(`("abc" "123")`),
@@ -83,15 +89,149 @@ func TestBind(t *testing.T) {
 			want:    &ab{"abc", "123"},
 			wantErr: false,
 		},
-		{
+		testCase{
 			name: "123 to int",
 			args: args{
 				exp: MustParse(`("abc" 123)`),
 				dst: new(ab),
 			},
 			wantErr: true,
-		},
+		})
+
+	{
+		var dst **string = new(*string)
+		var want **string = new(*string)
+		*want = stringPtr("abc")
+		newCase(
+			testCase{
+				name: "ptr ptr string",
+				args: args{
+					exp: MustParse(`"abc"`),
+					dst: dst,
+				},
+				want: want,
+			})
 	}
+
+	{
+		type nester struct {
+			A      string
+			Nested struct {
+				X int
+				Y int
+			}
+			C string
+		}
+		newCase(
+			testCase{
+				name: "nested1",
+				args: args{
+					exp: MustParse(`("abc" (1 2) "z")`),
+					dst: new(nester),
+				},
+				want: &nester{
+					"abc",
+					struct {
+						X int
+						Y int
+					}{1, 2},
+					"z",
+				},
+			})
+	}
+	{
+
+		type nester struct {
+			A      string
+			Nested *ab
+			C      int
+		}
+		newCase(
+			testCase{
+				name: "nested2",
+				args: args{
+					exp: MustParse(`("abc" ("a" "bb") 123)`),
+					dst: new(nester),
+				},
+				want: &nester{
+					"abc",
+					&ab{A: "a", B: "bb"},
+					123,
+				},
+			})
+	}
+	{
+		type level1 struct {
+			L2 *ab
+		}
+		type level0 struct {
+			A  string
+			L1 *level1
+			C  int
+		}
+		newCase(
+			testCase{
+				name: "nested3",
+				args: args{
+					exp: MustParse(`("abc" (("a" "bb")) 123)`),
+					dst: new(level0),
+				},
+				want: &level0{
+					"abc",
+					&level1{&ab{A: "a", B: "bb"}},
+					123,
+				},
+			})
+	}
+	{
+		type s struct {
+			A string
+			B string `sexpr:"0"`
+		}
+		newCase(
+			testCase{
+				name: "multiple-forms-bound-to-index-1",
+				args: args{
+					exp: MustParse(`("x")`),
+					dst: new(s),
+				},
+				want: &s{"x", "x"},
+			})
+	}
+	{
+		type s struct {
+			A string
+			B string `sexpr:"2"`
+		}
+		newCase(
+			testCase{
+				name: "multiple-forms-bound-to-index-1",
+				args: args{
+					exp: MustParse(`("x" ignored "b")`),
+					dst: new(s),
+				},
+				want: &s{"x", "b"},
+			})
+	}
+	{
+		type level0 struct {
+			A string
+			R []string `sexpr:"&rest"`
+		}
+		newCase(
+			testCase{
+				name: "rest1",
+				args: args{
+					exp: MustParse(`("x" "y" "z")`),
+					dst: new(level0),
+				},
+				want: &level0{
+					"x",
+					[]string{"y", "z"},
+				},
+			})
+	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := Bind(tt.args.exp, tt.args.dst)
