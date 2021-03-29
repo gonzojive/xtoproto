@@ -2,6 +2,7 @@ package expressions
 
 import (
 	"fmt"
+	"math"
 	"reflect"
 
 	"github.com/google/xtoproto/expression"
@@ -24,11 +25,16 @@ import (
 //
 // The "sexpr"
 func Bind(exp *e.Expression, dst interface{}) error {
+	dstVal := reflect.ValueOf(dst)
+	dstType := dstVal.Type()
+
+	if customBinder := defaultBinderRegistry.get(dstType); customBinder != nil {
+		return customBinder(exp, dst)
+	}
+
 	ul := exp.Value()
 
 	ulType := reflect.TypeOf(ul)
-	dstVal := reflect.ValueOf(dst)
-	dstType := dstVal.Type()
 
 	isPtr := dstType.Kind() == reflect.Ptr
 
@@ -43,15 +49,15 @@ func Bind(exp *e.Expression, dst interface{}) error {
 		dstVal.Elem().Set(newInstance)
 		return nil
 	}
-	if isPtr && dstType.Elem().Kind() == reflect.Struct {
-		parser, err := compileBinderForStruct(dstType.Elem())
+	if isPtr && (dstType.Elem().Kind() == reflect.Struct || dstType.Elem().Kind() == reflect.Slice) {
+		parser, err := compileBinderForPointerToType(dstType.Elem())
 		if err != nil {
 			return err
 		}
 		return parser(exp, dst)
 	}
 	if isDoublePtr && dstType.Elem().Elem().Kind() == reflect.Struct {
-		parser, err := compileBinderForStruct(dstType.Elem().Elem())
+		parser, err := compileBinderForPointerToType(dstType.Elem().Elem())
 		if err != nil {
 			return err
 		}
@@ -76,23 +82,26 @@ func MustParse(sexpr string) *e.Expression {
 	return got
 }
 
-func compileBinderForSettableType(t reflect.Type, setter func(val reflect.Value)) (binder, error) {
+func compileBinderForPointerToType(t reflect.Type) (binder, error) {
 	switch kind := t.Kind(); kind {
 	case reflect.Struct:
-		instanceBinder, err := compileBinderForStruct(t)
-		if err != nil {
-			return nil, err
-		}
+		return compileBinderForStruct(t)
+	case reflect.Slice:
 		return func(exp *e.Expression, dst interface{}) error {
-			instance := reflect.New(t)
-			if err := instanceBinder(exp, instance.Interface()); err != nil {
-				return err
+			val := exp.Value()
+			list, ok := val.(*e.List)
+			if !ok {
+				return fmt.Errorf("cannot bind %v from a non-list expression, got %s", t, exp.String())
 			}
-			setter(instance)
+			outSlice := reflect.MakeSlice(t, list.Len(), list.Len())
+			for i := 0; i < list.Len(); i++ {
+				if err := Bind(list.Nth(i), outSlice.Index(i).Addr().Interface()); err != nil {
+					return fmt.Errorf("failed to bind to element [%d] of %v: %w", i, t, err)
+				}
+			}
+			reflect.ValueOf(dst).Elem().Set(outSlice)
 			return nil
 		}, nil
-	case reflect.Slice:
-		return nil, fmt.Errorf("slice binding not yet supported")
 	default:
 		return nil, fmt.Errorf("binding %q not yet supported", t)
 		// return func(exp *e.Expression, dst interface{}) error {
@@ -102,21 +111,28 @@ func compileBinderForSettableType(t reflect.Type, setter func(val reflect.Value)
 }
 
 func compileBinderForStruct(structType reflect.Type) (binder, error) {
-	requiredLength := 0
-
 	var fieldBinderSpecs []*fieldAnnotation
 	var subBinders []binder
+	minLength := 0
+	hasRestArg := false
+
 	for i := 0; i < structType.NumField(); i++ {
 		f := structType.Field(i)
-		fa, err := parseFieldAnnotation(f)
+		fa, err := parseFieldAnnotation(f, hasRestArg)
 		if err != nil {
 			return nil, fmt.Errorf("field tag parse failed: %w", err)
 		}
 		listIndex := fa.listIndex
 		fieldBinderSpecs = append(fieldBinderSpecs, fa)
 
-		if listIndex+1 > requiredLength {
-			requiredLength = listIndex + 1
+		minLengthForField := listIndex + 1
+		if fa.rest {
+			minLengthForField = listIndex
+			hasRestArg = true
+		}
+
+		if minLengthForField > minLength {
+			minLength = minLengthForField
 		}
 
 		subBinders = append(subBinders, func(exp *e.Expression, dst interface{}) error {
@@ -124,6 +140,11 @@ func compileBinderForStruct(structType reflect.Type) (binder, error) {
 			list, ok := val.(*e.List)
 			if !ok {
 				return fmt.Errorf("cannot set field %q unless value is a list, got %s", f.Name, exp.String())
+			}
+			ptrToField := reflect.ValueOf(dst).Elem().FieldByIndex(f.Index).Addr().Interface()
+			if fa.rest {
+				restList := e.NewList(list.Slice()[listIndex:])
+				return Bind(e.FromList(restList), ptrToField)
 			}
 			if listIndex >= list.Len() {
 				return fmt.Errorf("cannot set field %q; index %d out of bounds for expression %s", f.Name, listIndex, exp.String())
@@ -142,14 +163,23 @@ func compileBinderForStruct(structType reflect.Type) (binder, error) {
 			// return nil
 		})
 	}
+	maxLength := minLength
+	if hasRestArg {
+		maxLength = math.MaxInt64
+	}
+
 	return func(exp *e.Expression, dst interface{}) error {
 		val := exp.Value()
 		list, ok := val.(*e.List)
 		if !ok {
 			return fmt.Errorf("cannot bind expression into struct unless exp is a list, got %s", exp.String())
 		}
-		if got, want := list.Len(), requiredLength; got != want {
-			return fmt.Errorf("cannot destructure expression: got length %d, want %d: %s", got, want, exp)
+		gotLen := list.Len()
+		if gotLen < minLength {
+			return fmt.Errorf("cannot destructure expression: got length %d, want >=%d: %s", gotLen, minLength, exp)
+		}
+		if gotLen > maxLength {
+			return fmt.Errorf("cannot destructure expression: got length %d, want <=%d: %s", gotLen, maxLength, exp)
 		}
 
 		for _, b := range subBinders {
@@ -174,7 +204,7 @@ type fieldAnnotation struct {
 	rest bool
 }
 
-func parseFieldAnnotation(f reflect.StructField) (*fieldAnnotation, error) {
+func parseFieldAnnotation(f reflect.StructField, alreadyHasRestArg bool) (*fieldAnnotation, error) {
 	defaultListIndex := func() (int, error) {
 		if len(f.Index) != 1 {
 			return 0, fmt.Errorf("nested fields not yet supported: %s has index %v", f.Name, f.Index)
@@ -204,8 +234,17 @@ func parseFieldAnnotation(f reflect.StructField) (*fieldAnnotation, error) {
 	}
 	if listIndex, ok := tagExpr.Value().(int); ok {
 		out.listIndex = listIndex
+	} else {
+		x, err := defaultListIndex()
+		if err != nil {
+			return nil, err
+		}
+		out.listIndex = x
 	}
 	if sym, ok := tagExpr.Value().(*e.Symbol); ok && sym.Equals(e.NewSymbol("&rest", "")) {
+		if alreadyHasRestArg {
+			return nil, fmt.Errorf("field %s cannot have &rest designotor; there is already a &rest field in the struct", f.Name)
+		}
 		out.rest = true
 	}
 	return out, nil
@@ -237,4 +276,42 @@ func (al *alist) lookup(keyPredicate func(key *e.Expression) bool) *e.Expression
 		}
 	}
 	return nil
+}
+
+type registeredBinder struct {
+	dstType reflect.Type
+	b       binder
+}
+
+type binderRegistry struct {
+	m map[reflect.Type]*registeredBinder
+}
+
+var defaultBinderRegistry = &binderRegistry{
+	make(map[reflect.Type]*registeredBinder),
+}
+
+func (r *binderRegistry) registerBinder(t reflect.Type, b func(exp *e.Expression, dst interface{}) error) {
+	r.m[t] = &registeredBinder{t, binder(b)}
+}
+
+func (r *binderRegistry) get(t reflect.Type) binder {
+	got := r.m[t]
+	if got == nil {
+		return nil
+	}
+	return got.b
+}
+
+// binder for **e.Expression
+func init() {
+	var x **e.Expression
+	defaultBinderRegistry.registerBinder(reflect.TypeOf(x), func(exp *e.Expression, dstAny interface{}) error {
+		dst := dstAny.(**e.Expression)
+		if dst == nil {
+			return fmt.Errorf("cannot assign expression %s to nil **Expression", exp)
+		}
+		*dst = exp
+		return nil
+	})
 }

@@ -8,6 +8,19 @@ import (
 	"github.com/google/xtoproto/expression"
 )
 
+var cmpOpts = []cmp.Option{
+	cmp.Transformer("expression", func(exp *expression.Expression) *testExp {
+		if exp == nil {
+			return nil
+		}
+		return &testExp{exp.Value()}
+	}),
+}
+
+type testExp struct {
+	Value interface{}
+}
+
 func TestReflectAssumptions(t *testing.T) {
 	aString := ""
 	aStringPtr := &aString
@@ -231,6 +244,32 @@ func TestBind(t *testing.T) {
 				},
 			})
 	}
+	{
+		var dst *[]int = new([]int)
+		var wantElm *[]int = &[]int{3, 4}
+		newCase(
+			testCase{
+				name: "slice-ints",
+				args: args{
+					exp: MustParse(`(3 4)`),
+					dst: dst,
+				},
+				want: wantElm,
+			})
+	}
+	{
+		var dst **expression.Expression = new(*expression.Expression)
+		wantElem := expression.FromFloat64(64.1)
+		newCase(
+			testCase{
+				name: "expression binder",
+				args: args{
+					exp: MustParse(`64.1`),
+					dst: dst,
+				},
+				want: &wantElem,
+			})
+	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -241,7 +280,7 @@ func TestBind(t *testing.T) {
 			if err != nil {
 				return
 			}
-			if diff := cmp.Diff(tt.want, tt.args.dst); diff != "" {
+			if diff := cmp.Diff(tt.want, tt.args.dst, cmpOpts...); diff != "" {
 				t.Errorf("Bind() produced unexpected result (-want, +got):\n  %s", diff)
 			}
 		})

@@ -234,14 +234,25 @@ func parseSymbol(literal string) (*Symbol, error) {
 
 func (s *Symbol) String() string { return s.ExpressionString() }
 
+// List is an ordered sequence of Expression values.
 type List struct{ elems []*Expression }
 
-func (l *List) Len() int              { return len(l.elems) }
-func (l *List) Nth(i int) *Expression { return l.elems[i] }
-func (l *List) Slice() []*Expression  { return l.elems }
+// NewList returns a new list made up of the provided sequence of expressions.
+func NewList(elems []*Expression) *List { return &List{elems} }
 
+// Len return the number of elements.
+func (l *List) Len() int { return len(l.elems) }
+
+// Nth returns the element in the list at offset n.
+func (l *List) Nth(n int) *Expression { return l.elems[n] }
+
+// Slice returns the list as a slice of expressions.
+func (l *List) Slice() []*Expression { return l.elems }
+
+// String returns a human readable representation of the list.
 func (l *List) String() string { return l.ExpressionString() }
 
+// ExpressionString returns the S-Expression representation of the list.
 func (l *List) ExpressionString() string {
 	var items []string
 	for _, e := range l.elems {
@@ -250,6 +261,7 @@ func (l *List) ExpressionString() string {
 	return fmt.Sprintf("(%s)", strings.Join(items, " "))
 }
 
+// Proto returns the list as a protocol buffer.
 func (l *List) Proto() *pb.List {
 	var elems []*pb.Expression
 	for _, e := range l.elems {
@@ -261,17 +273,38 @@ func (l *List) Proto() *pb.List {
 }
 
 func FromInt(v int) *Expression {
-	return &Expression{proto: &pb.Expression{Value: &pb.Expression_Int64{Int64: int64(v)}}}
+	return &Expression{
+		proto:       &pb.Expression{Value: &pb.Expression_Int64{Int64: int64(v)}},
+		parsedValue: v,
+	}
 }
 
 func FromFloat64(v float64) *Expression {
-	return &Expression{proto: &pb.Expression{Value: &pb.Expression_Double{Double: v}}}
+	return &Expression{
+		proto:       &pb.Expression{Value: &pb.Expression_Double{Double: v}},
+		parsedValue: v,
+	}
 }
 
 func FromFloat32(v float32) *Expression {
-	return &Expression{proto: &pb.Expression{Value: &pb.Expression_Float{Float: v}}}
+	return &Expression{
+		proto:       &pb.Expression{Value: &pb.Expression_Float{Float: v}},
+		parsedValue: float64(v),
+	}
 }
 
 func FromString(v float32) *Expression {
-	return &Expression{proto: &pb.Expression{Value: &pb.Expression_Float{Float: v}}}
+	return &Expression{
+		proto:       &pb.Expression{Value: &pb.Expression_Float{Float: v}},
+		parsedValue: float64(v),
+	}
+}
+
+func FromList(l *List) *Expression {
+	return &Expression{
+		proto: &pb.Expression{
+			Value: &pb.Expression_List{List: l.Proto()},
+		},
+		parsedValue: l,
+	}
 }
