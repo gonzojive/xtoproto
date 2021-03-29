@@ -293,10 +293,10 @@ func FromFloat32(v float32) *Expression {
 	}
 }
 
-func FromString(v float32) *Expression {
+func FromString(v string) *Expression {
 	return &Expression{
-		proto:       &pb.Expression{Value: &pb.Expression_Float{Float: v}},
-		parsedValue: float64(v),
+		proto:       &pb.Expression{Value: &pb.Expression_String_{String_: v}},
+		parsedValue: v,
 	}
 }
 

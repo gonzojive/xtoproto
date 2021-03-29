@@ -15,6 +15,12 @@ var cmpOpts = []cmp.Option{
 		}
 		return &testExp{exp.Value()}
 	}),
+	cmp.Transformer("expressionList", func(exp *expression.List) *testExp {
+		if exp == nil {
+			return nil
+		}
+		return &testExp{exp.Slice()}
+	}),
 }
 
 type testExp struct {
@@ -268,6 +274,50 @@ func TestBind(t *testing.T) {
 					dst: dst,
 				},
 				want: &wantElem,
+			})
+	}
+	{
+		var dst **expression.Expression = new(*expression.Expression)
+		wantElem := expression.FromList(
+			expression.NewList([]*expression.Expression{
+				expression.FromString("a"),
+				expression.FromString("b"),
+				expression.FromInt(3),
+			}),
+		)
+		newCase(
+			testCase{
+				name: "expression list binder",
+				args: args{
+					exp: MustParse(`("a" "b" 3)`),
+					dst: dst,
+				},
+				want: &wantElem,
+			})
+	}
+	{
+		type level0 struct {
+			A           string
+			Complicated *expression.Expression
+			Z           string
+		}
+		newCase(
+			testCase{
+				name: "expression list binder",
+				args: args{
+					exp: MustParse(`("a" ("b" "c") "z")`),
+					dst: &level0{},
+				},
+				want: &level0{
+					A: "a",
+					Complicated: expression.FromList(
+						expression.NewList([]*expression.Expression{
+							expression.FromString("b"),
+							expression.FromString("c"),
+						}),
+					),
+					Z: "z",
+				},
 			})
 	}
 
