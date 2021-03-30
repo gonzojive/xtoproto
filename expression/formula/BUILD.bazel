@@ -5,22 +5,33 @@ go_library(
     srcs = [
         "formula.go",
         "formula_ast.go",
+        "formula_ast_types.go",
         "formula_builtins.go",
     ],
     importpath = "github.com/google/xtoproto/expression/formula",
     visibility = ["//visibility:public"],
     deps = [
         "//expression:go_default_library",
-        "//proto/internal/formulair:go_default_library",
+        "//expression/expressions:go_default_library",
+        "//proto/expression/formulair:go_default_library",
+        "@org_golang_google_protobuf//encoding/prototext:go_default_library",
     ],
 )
 
 go_test(
     name = "go_default_test",
-    srcs = ["formula_test.go"],
+    srcs = [
+        "formula_ast_test.go",
+        "formula_test.go",
+    ],
     embed = [":go_default_library"],
     deps = [
         "//expression:go_default_library",
+        "//expression/expressions:go_default_library",
+        "//proto/expression:go_default_library",
+        "//proto/expression/formulair:go_default_library",
         "@com_github_google_go_cmp//cmp:go_default_library",
+        "@org_golang_google_protobuf//encoding/prototext:go_default_library",
+        "@org_golang_google_protobuf//testing/protocmp:go_default_library",
     ],
 )

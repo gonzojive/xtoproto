@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-option go_package = "github.com/google/xtoproto/proto/internal/formulair";
+option go_package = "github.com/google/xtoproto/proto/expression/formulair";
 
 package xtoproto.formula.internal;
 

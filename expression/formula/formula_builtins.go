@@ -6,6 +6,11 @@ import (
 
 const namespace expression.Namespace = "formula"
 
+var (
+	// TODO(reddaly): Clean up namespace handling.
+	ifSymbol = expression.NewSymbol("if", "")
+)
+
 func sym(name string) *expression.Symbol { return expression.NewSymbol(name, namespace) }
 
 var (
@@ -55,6 +60,13 @@ var (
 				}
 
 			},
+		},
+	}
+
+	defaultSpecialForms = []*specialFormDef{
+		{
+			name:    sym("if"),
+			compile: compileIfElse,
 		},
 	}
 )

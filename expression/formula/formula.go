@@ -5,7 +5,8 @@ package formula
 import (
 	"fmt"
 
-	"github.com/google/xtoproto/expression"
+	e "github.com/google/xtoproto/expression"
+	irpb "github.com/google/xtoproto/proto/expression/formulair"
 )
 
 // EvalContext is passed to functions during evaluation.
@@ -19,12 +20,18 @@ type EvalContext struct {
 }
 
 func defaultEvalContext() *EvalContext {
-	return &EvalContext{
-		&lexEnv{
-			fnDefs: builtinFunctions,
-		},
+	out := &EvalContext{
+		&lexEnv{},
 		"",
 	}
+
+	for _, f := range builtinFunctions {
+		out.lexEnv = out.lexEnv.withFunctionDef(f)
+	}
+	for _, sf := range defaultSpecialForms {
+		out.lexEnv = out.lexEnv.withBinding(sf)
+	}
+	return out
 }
 
 // String returns a summary of the
@@ -40,7 +47,7 @@ func (ectx *EvalContext) errorf(format string, arg ...interface{}) error {
 
 // Eval evaluates the given expression according to the semantics in the package
 // description.
-func Eval(exp *expression.Expression) (Value, error) {
+func Eval(exp *e.Expression) (Value, error) {
 	ectx := defaultEvalContext()
 	// First we check the type of the expression. Literals evaluate to
 	// their read values.
@@ -48,12 +55,12 @@ func Eval(exp *expression.Expression) (Value, error) {
 	switch v := unevaled.(type) {
 	case int, int8, int16, int32, int64, uint, uint16, uint32, uint64, string, float32, float64, []byte:
 		return v, nil
-	case *expression.List:
+	case *e.List:
 		if v.Len() == 0 {
 			return nil, ectx.errorf("unsupported form: empty list")
 		}
 		vals := v.Slice()
-		operator, ok := vals[0].Value().(*expression.Symbol)
+		operator, ok := vals[0].Value().(*e.Symbol)
 		if !ok {
 			return nil, ectx.errorf("first argument in an s-expression must be a symbol, got %v", vals[0])
 		}
@@ -69,43 +76,97 @@ func Eval(exp *expression.Expression) (Value, error) {
 // symKey is used when a symbol is needed in a map.
 type symKey struct {
 	Name      string
-	Namespace expression.Namespace
+	Namespace e.Namespace
 }
 
-func (k symKey) String() string             { return k.Symbol().String() }
-func (k symKey) Symbol() *expression.Symbol { return expression.NewSymbol(k.Name, k.Namespace) }
+func (k symKey) String() string    { return k.Symbol().String() }
+func (k symKey) Symbol() *e.Symbol { return e.NewSymbol(k.Name, k.Namespace) }
 
 type fnDef struct {
-	name *expression.Symbol
+	name *e.Symbol
 	impl func(ectx *EvalContext, args []Value) (Value, error)
+}
+
+func (def *fnDef) variableName() *e.Symbol {
+	return def.name
+}
+
+func (def *fnDef) kind() irpb.Binding_Kind {
+	return irpb.Binding_FUNCTION
+}
+
+type specialFormDef struct {
+	name    *e.Symbol
+	compile func(cctx *compileContext, wholeForm *e.Expression) (expr, error)
+}
+
+func (def *specialFormDef) variableName() *e.Symbol {
+	return def.name
+}
+
+func (def *specialFormDef) kind() irpb.Binding_Kind {
+	return irpb.Binding_FUNCTION
 }
 
 // Value is an evaluated value.
 type Value interface{}
 
+type lexEnvEntry interface {
+	// The symbol bound to a value in a lexical environment.
+	variableName() *e.Symbol
+
+	// Function, variable, or some other namespace. Note that function
+	// is used for macros and special forms, too.
+	kind() irpb.Binding_Kind
+}
+
 // lexEnv is used to represent the lexical environment. It contains
 // function bindings to symbols, variable bindings, etc.
 type lexEnv struct {
-	fnDefs []*fnDef
+	// Bindings later in the list shadow those earlier in the list.
+	bindings []lexEnvEntry
 }
 
 func (le *lexEnv) copy() *lexEnv {
 	out := &lexEnv{}
-	out.fnDefs = append(out.fnDefs, le.fnDefs...)
+	out.bindings = append(out.bindings, le.bindings...)
 	return out
 }
 
-func (le *lexEnv) resolveFnDef(name *expression.Symbol) *fnDef {
+func (le *lexEnv) withFunctionDef(def *fnDef) *lexEnv {
+	return le.withBinding(def)
+}
+
+func (le *lexEnv) withBinding(b lexEnvEntry) *lexEnv {
+	cp := le.copy()
+	cp.bindings = append(cp.bindings, b)
+	return cp
+}
+
+func (le *lexEnv) resolveFnDef(name *e.Symbol) *fnDef {
+	got := le.resolve(name, irpb.Binding_FUNCTION)
+	if got == nil {
+		return nil
+	}
+	if fd, ok := got.(*fnDef); ok {
+		return fd
+	}
+	return nil
+}
+
+func (le *lexEnv) resolve(name *e.Symbol, kind irpb.Binding_Kind) lexEnvEntry {
 	name = normalizeSym(name)
-	for _, fd := range le.fnDefs {
-		if fd.name.Equals(name) {
-			return fd
+	//for _, b := range le.bindings {
+	for i := len(le.bindings) - 1; i >= 0; i-- {
+		b := le.bindings[i]
+		if b.kind() == kind && b.variableName().Equals(name) {
+			return b
 		}
 	}
 	return nil
 }
 
-func listValues(l *expression.List) []Value {
+func listValues(l *e.List) []Value {
 	var out []Value
 	for i := 0; i < l.Len(); i++ {
 		out = append(out, l.Nth(i).Value())
@@ -113,9 +174,9 @@ func listValues(l *expression.List) []Value {
 	return out
 }
 
-func normalizeSym(s *expression.Symbol) *expression.Symbol {
+func normalizeSym(s *e.Symbol) *e.Symbol {
 	if s.Namespace() == "" {
-		return expression.NewSymbol(s.Name(), namespace)
+		return e.NewSymbol(s.Name(), namespace)
 	}
 	return s
 }

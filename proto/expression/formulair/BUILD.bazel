@@ -19,7 +19,7 @@ proto_library(
 
 go_proto_library(
     name = "formulair_go_proto",
-    importpath = "github.com/google/xtoproto/proto/internal/formulair",
+    importpath = "github.com/google/xtoproto/proto/expression/formulair",
     proto = ":formulair_proto",
     visibility = [
         "//expression/formula:__subpackages__",
@@ -32,7 +32,7 @@ go_proto_library(
 go_library(
     name = "go_default_library",
     embed = [":formulair_go_proto"],
-    importpath = "github.com/google/xtoproto/proto/internal/formulair",
+    importpath = "github.com/google/xtoproto/proto/expression/formulair",
     visibility = [
         "//expression/formula:__subpackages__",
         "//proto:__subpackages__",
