@@ -191,11 +191,23 @@ func compileIfElse(cctx *compileContext, form *expression.Expression) (expr, err
 	if err != nil {
 		return nil, cctx.errorf("error parsing if/else TEST clause: %w", err)
 	}
+	then, err := compile(cctx, parsed.Rest[0])
+	if err != nil {
+		return nil, cctx.errorf("error parsing if/else THEN clause: %w", err)
+	}
+	var elseExpr expr
+	if len(parsed.Rest) == 2 {
+		x, err := compile(cctx, parsed.Rest[0])
+		if err != nil {
+			return nil, cctx.errorf("error parsing if/else ELSE clause: %w", err)
+		}
+		elseExpr = x
+	}
 
 	return &ifElseExpr{
 		commonExpr: cctx.commonExpr(form),
 		test:       test,
-		then:       test,
-		elseExpr:   test,
+		then:       then,
+		elseExpr:   elseExpr,
 	}, nil
 }

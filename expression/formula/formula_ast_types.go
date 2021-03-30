@@ -105,12 +105,16 @@ type ifElseExpr struct {
 }
 
 func (ex *ifElseExpr) astProto() *irpb.AST_Expression {
+	var elseProto *irpb.AST_Expression
+	if ex.elseExpr != nil {
+		elseProto = ex.elseExpr.astProto()
+	}
 	out := ex.baseProto()
 	out.Value = &irpb.AST_Expression_IfElse{
 		IfElse: &irpb.AST_IfElse{
 			Test:           ex.test.astProto(),
-			ThenExpression: ex.test.astProto(),
-			ElseExpression: ex.elseExpr.astProto(),
+			ThenExpression: ex.then.astProto(),
+			ElseExpression: elseProto,
 		},
 	}
 	return out
