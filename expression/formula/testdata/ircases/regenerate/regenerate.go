@@ -28,7 +28,7 @@ func main() {
 }
 
 func run() error {
-	cases, err := ircases.Regenerate()
+	cases, err := ircases.Load(ircases.LoadOptions{Regenerate: true})
 	if err != nil {
 		return err
 	}
@@ -37,7 +37,7 @@ func run() error {
 		tc := tc
 		eg.Go(func() error {
 			outputPath := path.Join(*outputDir, tc.ProtoTextName())
-			goldenContent := marshalOptions.Format(tc.GoldenProto())
+			goldenContent := marshalOptions.Format(tc.RegeneratedProto())
 			return ioutil.WriteFile(outputPath, []byte(goldenContent), 0664)
 		})
 	}

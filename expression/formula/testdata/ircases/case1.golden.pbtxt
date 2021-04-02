@@ -1,4 +1,5 @@
 name:  "case1"
+input_formula:  "(if true 1 3)"
 expression:  {
   if_else:  {
     test:  {

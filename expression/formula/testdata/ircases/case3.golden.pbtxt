@@ -1,0 +1,3 @@
+name:  "case3"
+input_formula:  "(* 34.1 2)"
+error:  "compilation error:\nunsupported operator * in form (* 34.1 2)"

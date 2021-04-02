@@ -218,7 +218,7 @@ message AST {
 
     message TestCase {
         string name = 1;
-        string content = 2;
+        string input_formula = 2;
         string error = 3;
         Expression expression = 4;
     }

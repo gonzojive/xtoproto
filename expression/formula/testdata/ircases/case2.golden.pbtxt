@@ -1,0 +1,10 @@
+name:  "case2"
+input_formula:  "// comment\n3"
+expression:  {
+  constant:  {
+    value:  {
+      int64:  3
+    }
+  }
+  source_context:  {}
+}
