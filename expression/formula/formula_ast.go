@@ -34,10 +34,10 @@ type CompiledExpression struct {
 }
 
 func (ce *CompiledExpression) String() string {
-	return prototext.Format(ce.astProto())
+	return prototext.Format(ce.ASTProto())
 }
 
-func (ce *CompiledExpression) astProto() *irpb.AST_Expression {
+func (ce *CompiledExpression) ASTProto() *irpb.AST_Expression {
 	return ce.expr.astProto()
 }
 
@@ -187,6 +187,7 @@ func compileIfElse(cctx *compileContext, form *expression.Expression) (expr, err
 	if len(parsed.Rest) > 2 {
 		return nil, cctx.errorf("error parsing if/else: must have only a THEN and ELSE form")
 	}
+
 	test, err := compile(cctx, parsed.Test)
 	if err != nil {
 		return nil, cctx.errorf("error parsing if/else TEST clause: %w", err)
@@ -197,7 +198,7 @@ func compileIfElse(cctx *compileContext, form *expression.Expression) (expr, err
 	}
 	var elseExpr expr
 	if len(parsed.Rest) == 2 {
-		x, err := compile(cctx, parsed.Rest[0])
+		x, err := compile(cctx, parsed.Rest[1])
 		if err != nil {
 			return nil, cctx.errorf("error parsing if/else ELSE clause: %w", err)
 		}

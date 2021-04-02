@@ -215,4 +215,11 @@ message AST {
     message SourceContext {
         xtoproto.expression.SourceContext context = 1;
     }
+
+    message TestCase {
+        string name = 1;
+        string content = 2;
+        string error = 3;
+        Expression expression = 4;
+    }
 }

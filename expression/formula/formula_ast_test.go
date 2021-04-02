@@ -68,29 +68,29 @@ func TestCompile(t *testing.T) {
 				name:  "1 plus 2",
 				input: expressions.MustParse(`(+ 1 2)`),
 				want: mustParseTextProto(`
-	funcall {
-		function {
-			variable {
-				symbol {
-					name: "+",
-				}
-			}
-		}
-		positional_args {
-			constant {
-				value {
-					int64: 1
-				}
-			}
-		}
-		positional_args {
-			constant {
-				value {
-					int64: 2
-				}
+funcall {
+	function {
+		variable {
+			symbol {
+				name: "+",
 			}
 		}
 	}
+	positional_args {
+		constant {
+			value {
+				int64: 1
+			}
+		}
+	}
+	positional_args {
+		constant {
+			value {
+				int64: 2
+			}
+		}
+	}
+}
 	`),
 			})
 		newCase(
@@ -98,29 +98,17 @@ func TestCompile(t *testing.T) {
 				name:  "if",
 				input: expressions.MustParse(`(if true 1 0)`),
 				want: mustParseTextProto(`
-		funcall {
-			function {
-				variable {
-					symbol {
-						name: "+",
-					}
-				}
-			}
-			positional_args {
-				constant {
-					value {
-						int64: 1
-					}
-				}
-			}
-			positional_args {
-				constant {
-					value {
-						int64: 2
-					}
-				}
-			}
-		}
+if_else {
+	test {
+		variable {symbol {name: "true"}}
+	}
+	then_expression {
+		constant { value { int64: 1} }
+	}
+	else_expression {
+		constant { value { int64: 0} }
+	}
+}
 		`),
 			})
 	}
@@ -134,7 +122,7 @@ func TestCompile(t *testing.T) {
 			if err != nil {
 				return
 			}
-			if diff := cmp.Diff(tt.want, got.astProto(), cmpOptsNoSourceContext...); diff != "" {
+			if diff := cmp.Diff(tt.want, got.ASTProto(), cmpOptsNoSourceContext...); diff != "" {
 				t.Errorf("Bind() produced unexpected result (-want, +got):\n  %s", diff)
 			}
 		})

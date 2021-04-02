@@ -1,0 +1,30 @@
+name:  "case1"
+expression:  {
+  if_else:  {
+    test:  {
+      variable:  {
+        symbol:  {
+          name:  "true"
+        }
+      }
+      source_context:  {}
+    }
+    then_expression:  {
+      constant:  {
+        value:  {
+          int64:  1
+        }
+      }
+      source_context:  {}
+    }
+    else_expression:  {
+      constant:  {
+        value:  {
+          int64:  3
+        }
+      }
+      source_context:  {}
+    }
+  }
+  source_context:  {}
+}

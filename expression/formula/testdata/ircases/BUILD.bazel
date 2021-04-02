@@ -1,0 +1,26 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["ircases.go"],
+    data = [
+        ":golden_data",
+    ],
+    importpath = "github.com/google/xtoproto/expression/formula/testdata/ircases",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//expression:go_default_library",
+        "//expression/formula:go_default_library",
+        "//proto/expression/formulair:go_default_library",
+        "@io_bazel_rules_go//go/tools/bazel:go_default_library",
+        "@org_golang_x_sync//errgroup:go_default_library",
+    ],
+)
+
+filegroup(
+    name = "golden_data",
+    srcs = glob([
+        "*.formula",
+        "*.textproto",
+    ]),
+)
